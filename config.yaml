@@ -1,0 +1,18 @@
+socket:
+  host: 192.168.1.60
+  port: 10001
+  reconnect_interval: 5  # seconds
+
+mqtt:
+  broker: broker.hivemq.com
+  port: 1883
+  topic_sub: my/device/incoming
+  topic_pub: my/device/outgoing
+  client_id: MySocketMQTTClient
+  username: ""  # Optional
+  password: ""  # Optional
+  reconnect_interval: 5  # seconds
+
+logging:
+  file: "app.log"
+  level: "INFO"
