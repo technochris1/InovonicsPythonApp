@@ -4,13 +4,14 @@ socket:
   reconnect_interval: 5  # seconds
 
 mqtt:
-  broker: broker.hivemq.com
+  broker: 192.168.1.87
   port: 1883
-  topic_sub: my/device/incoming
-  topic_pub: my/device/outgoing
+  topic_sub: homeassistant
+  topic_state_pub: inovonics
+  topic_pub: homeassistant
   client_id: MySocketMQTTClient
-  username: ""  # Optional
-  password: ""  # Optional
+  username: "mqtt"  # Optional
+  password: "H6V2L3N2"  # Optional
   reconnect_interval: 5  # seconds
 
 logging:
