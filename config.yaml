@@ -4,7 +4,7 @@ socket:
   reconnect_interval: 5  # seconds
 
 mqtt:
-  broker: 192.168.1.87
+  broker: 192.168.1.31
   port: 1883
   topic_sub: homeassistant
   topic_state_pub: inovonics
