@@ -543,7 +543,7 @@ class SocketMQTTClient:
                 upperDeviceID+"_0_1": {
                     "p": "binary_sensor",
                     "name":"Reserved",
-                    "expire_after":60,
+                    "expire_after":3600,
                     "unique_id":upperDeviceID+".STAT0.1",
                     "value_template": "{{ value_json[0] }}",
                     #"force_update":True,
@@ -678,7 +678,7 @@ class SocketMQTTClient:
         
         #logging.info(f"[PROCESSOR.LOGIC] MQTT Publish Topic: {topic} Data: {data}")                       
 
-        result = self.mqtt_client.publish(topic, json.dumps(data))
+        result = self.mqtt_client.publish(topic, json.dumps(data),0,True)
         
         if result.rc != 0:
             raise RuntimeError(f"MQTT publish failed: {result.rc}")
@@ -689,7 +689,7 @@ class SocketMQTTClient:
 
         topic = self.mqtt_config['topic_state_pub']+"/"+upperDeviceID+"/"+str(stat)+"/"+str(bit)+"/state"
         
-        result = self.mqtt_client.publish(topic, state)
+        result = self.mqtt_client.publish(topic, state, 0, True)
         
         if result.rc != 0:
             raise RuntimeError(f"MQTT publish failed: {result.rc}")
