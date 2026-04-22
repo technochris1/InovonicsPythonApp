@@ -518,6 +518,19 @@ class SocketMQTTClient:
     def bol_to_state(self, bol):
         return "ON" if bol else "OFF"
 
+    def publish_mqtt(self, topic, payload, qos=1, retain=False):
+        if not self.mqtt_connected:
+            raise RuntimeError("MQTT not connected")
+
+        # Use explicit keyword args to avoid ambiguity in retain/qos ordering.
+        result = self.mqtt_client.publish(topic=topic, payload=payload, qos=qos, retain=retain)
+
+        if result.rc != mqtt.MQTT_ERR_SUCCESS:
+            raise RuntimeError(f"MQTT publish failed: rc={result.rc} topic={topic}")
+
+        result.wait_for_publish()
+        logging.info(f"[MQTT] Published topic={topic} qos={qos} retain={retain} mid={result.mid}")
+
     def generate_homeassistant_device(self, deviceID, deviceMID, devicePTI, raw_message):
         logging.info(f"[PROCESSOR.LOGIC.generate_homeassistant_device] Device Payload Message START:[{deviceID}] MID:[{deviceMID}] PTI:[{devicePTI}]")
         
@@ -678,10 +691,7 @@ class SocketMQTTClient:
         
         #logging.info(f"[PROCESSOR.LOGIC] MQTT Publish Topic: {topic} Data: {data}")                       
 
-        result = self.mqtt_client.publish(topic, json.dumps(data),0,True)
-        
-        if result.rc != 0:
-            raise RuntimeError(f"MQTT publish failed: {result.rc}")
+        self.publish_mqtt(topic, json.dumps(data), qos=1, retain=True)
 
     def update_homeassistant_component(self, upperDeviceID, stat, bit, state):
         #logging.info(f"[PROCESSOR.LOGIC.update_homeassistant_component] Device Payload Message START:[{upperDeviceID}] STAT:[{stat}] BIT:[{bit}] STATE:[{state}]")
@@ -689,10 +699,7 @@ class SocketMQTTClient:
 
         topic = self.mqtt_config['topic_state_pub']+"/"+upperDeviceID+"/"+str(stat)+"/"+str(bit)+"/state"
         
-        result = self.mqtt_client.publish(topic, state, 0, True)
-        
-        if result.rc != 0:
-            raise RuntimeError(f"MQTT publish failed: {result.rc}")
+        self.publish_mqtt(topic, state, qos=1, retain=True)
         
     def _process_message_logic(self, message: bytes):
         logging.info(f"[PROCESSOR.LOGIC] Processing message: {message.hex()}")
@@ -761,7 +768,7 @@ class SocketMQTTClient:
                     try:
                         self.sock.send(b'\x34\x03\x90\xC7') # request SN
                         logging.info(f"[PROCESSOR.LOGIC] Network Coordinator SN Request Message Sent")
-                    except e:
+                    except Exception as e:
                         logging.error(f"[PROCESSOR.LOGIC] Error: {e} ")
                         pass
                 else:
@@ -769,7 +776,7 @@ class SocketMQTTClient:
                         try:
                             self.sock.send(b'\x34\x03\x82\xB9') # request NID
                             logging.info(f"[PROCESSOR.LOGIC] Network Coordinator NID Request Message Sent")
-                        except e:
+                        except Exception as e:
                             logging.error(f"[PROCESSOR.LOGIC] Error: {e} ")
                             pass
                     else:
