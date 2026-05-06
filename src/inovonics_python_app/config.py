@@ -1,12 +1,110 @@
 from __future__ import annotations
 
+import os
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import yaml
 
+ENV_CONFIG_PATH = "INOVONICS_CONFIG_PATH"
 SENSITIVE_KEY_PARTS = ("password", "secret", "token", "api_key", "apikey")
+TRUE_VALUES = {"1", "true", "yes", "on"}
+FALSE_VALUES = {"0", "false", "no", "off"}
+
+
+ENV_OVERRIDE_SPECS = (
+    ("INOVONICS_PROCESSOR_HOST", ("processor", "host"), str),
+    ("INOVONICS_PROCESSOR_PORT", ("processor", "port"), int),
+    (
+        "INOVONICS_PROCESSOR_RECONNECT_INITIAL_DELAY_SECONDS",
+        ("processor", "reconnect_initial_delay_seconds"),
+        float,
+    ),
+    (
+        "INOVONICS_PROCESSOR_RECONNECT_MAX_DELAY_SECONDS",
+        ("processor", "reconnect_max_delay_seconds"),
+        float,
+    ),
+    (
+        "INOVONICS_PROCESSOR_SOCKET_TIMEOUT_SECONDS",
+        ("processor", "socket_timeout_seconds"),
+        float,
+    ),
+    (
+        "INOVONICS_PROCESSOR_QUEUE_TIMEOUT_SECONDS",
+        ("processor", "queue_timeout_seconds"),
+        float,
+    ),
+    (
+        "INOVONICS_PROCESSOR_AUTO_REQUEST_COORDINATOR_METADATA",
+        ("processor", "auto_request_coordinator_metadata"),
+        lambda raw: _parse_bool(raw, env_name="INOVONICS_PROCESSOR_AUTO_REQUEST_COORDINATOR_METADATA"),
+    ),
+    ("INOVONICS_MQTT_BROKER", ("mqtt", "broker"), str),
+    ("INOVONICS_MQTT_PORT", ("mqtt", "port"), int),
+    ("INOVONICS_MQTT_CLIENT_ID", ("mqtt", "client_id"), str),
+    ("INOVONICS_MQTT_USERNAME", ("mqtt", "username"), str),
+    ("INOVONICS_MQTT_PASSWORD", ("mqtt", "password"), str),
+    ("INOVONICS_MQTT_KEEPALIVE", ("mqtt", "keepalive"), int),
+    (
+        "INOVONICS_MQTT_RECONNECT_INITIAL_DELAY_SECONDS",
+        ("mqtt", "reconnect_initial_delay_seconds"),
+        float,
+    ),
+    (
+        "INOVONICS_MQTT_RECONNECT_MAX_DELAY_SECONDS",
+        ("mqtt", "reconnect_max_delay_seconds"),
+        float,
+    ),
+    (
+        "INOVONICS_MQTT_PUBLISH_WAIT_TIMEOUT_SECONDS",
+        ("mqtt", "publish_wait_timeout_seconds"),
+        float,
+    ),
+    (
+        "INOVONICS_MQTT_STARTUP_WAIT_TIMEOUT_SECONDS",
+        ("mqtt", "startup_wait_timeout_seconds"),
+        float,
+    ),
+    (
+        "INOVONICS_MQTT_COMMAND_TOPIC",
+        ("mqtt", "command_topic"),
+        lambda raw: _parse_optional_string(raw),
+    ),
+    ("INOVONICS_MQTT_DISCOVERY_PREFIX", ("mqtt", "discovery_prefix"), str),
+    ("INOVONICS_MQTT_STATE_PREFIX", ("mqtt", "state_prefix"), str),
+    (
+        "INOVONICS_BIT_COALESCING_ENABLED",
+        ("bit_coalescing", "enabled"),
+        lambda raw: _parse_bool(raw, env_name="INOVONICS_BIT_COALESCING_ENABLED"),
+    ),
+    (
+        "INOVONICS_BIT_COALESCING_QUIET_PERIOD_MS",
+        ("bit_coalescing", "quiet_period_ms"),
+        int,
+    ),
+    (
+        "INOVONICS_BIT_COALESCING_MAX_HOLD_MS",
+        ("bit_coalescing", "max_hold_ms"),
+        int,
+    ),
+    (
+        "INOVONICS_BIT_COALESCING_IDLE_TTL_MS",
+        ("bit_coalescing", "idle_ttl_ms"),
+        int,
+    ),
+    (
+        "INOVONICS_BIT_COALESCING_FLUSH_INTERVAL_MS",
+        ("bit_coalescing", "flush_interval_ms"),
+        int,
+    ),
+    ("INOVONICS_LOGGING_LEVEL", ("logging", "level"), str),
+    ("INOVONICS_LOGGING_FILE", ("logging", "file"), str),
+    ("INOVONICS_LOGGING_MAX_BYTES", ("logging", "max_bytes"), int),
+    ("INOVONICS_LOGGING_BACKUP_COUNT", ("logging", "backup_count"), int),
+)
 
 
 @dataclass(slots=True)
@@ -77,6 +175,10 @@ def resolve_config_path(config_path: str | Path | None = None) -> Path:
     if config_path is not None:
         return Path(config_path)
 
+    env_config_path = os.getenv(ENV_CONFIG_PATH)
+    if env_config_path:
+        return Path(env_config_path)
+
     for candidate in (Path("config.local.yaml"), Path("config.yaml")):
         if candidate.exists():
             return candidate
@@ -87,7 +189,7 @@ def resolve_config_path(config_path: str | Path | None = None) -> Path:
 def load_config(config_path: str | Path | None = None) -> AppConfig:
     path = resolve_config_path(config_path)
     raw_data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    data = _normalize_config(raw_data)
+    data = _apply_environment_overrides(_normalize_config(raw_data))
 
     processor_data = data["processor"]
     mqtt_data = data["mqtt"]
@@ -153,7 +255,9 @@ def load_config(config_path: str | Path | None = None) -> AppConfig:
 def render_config_for_logging(config_path: str | Path | None = None) -> tuple[Path, str]:
     path = resolve_config_path(config_path)
     raw_data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    sanitized = _redact_sensitive_values(raw_data)
+    sanitized = _redact_sensitive_values(
+        _apply_environment_overrides(_normalize_config(raw_data))
+    )
     rendered = yaml.safe_dump(sanitized, sort_keys=False).rstrip()
     return path, rendered or "{}"
 
@@ -200,6 +304,44 @@ def _normalize_config(data: dict[str, Any]) -> dict[str, Any]:
         "bit_coalescing": data.get("bit_coalescing", {}),
         "logging": data.get("logging", {}),
     }
+
+
+def _apply_environment_overrides(data: dict[str, Any]) -> dict[str, Any]:
+    overridden = deepcopy(data)
+
+    for env_name, path_parts, parser in ENV_OVERRIDE_SPECS:
+        raw_value = os.getenv(env_name)
+        if raw_value is None:
+            continue
+
+        _set_nested_value(overridden, path_parts, parser(raw_value))
+
+    return overridden
+
+
+def _set_nested_value(data: dict[str, Any], path_parts: tuple[str, ...], value: Any) -> None:
+    current = data
+    for key in path_parts[:-1]:
+        next_value = current.get(key)
+        if not isinstance(next_value, dict):
+            next_value = {}
+            current[key] = next_value
+        current = next_value
+
+    current[path_parts[-1]] = value
+
+
+def _parse_bool(raw_value: str, *, env_name: str) -> bool:
+    normalized = raw_value.strip().lower()
+    if normalized in TRUE_VALUES:
+        return True
+    if normalized in FALSE_VALUES:
+        return False
+    raise ValueError(f"{env_name} must be one of {sorted(TRUE_VALUES | FALSE_VALUES)}")
+
+
+def _parse_optional_string(raw_value: str) -> str | None:
+    return raw_value if raw_value else None
 
 
 def _redact_sensitive_values(value: Any) -> Any:

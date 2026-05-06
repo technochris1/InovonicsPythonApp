@@ -52,3 +52,68 @@ def test_render_config_for_logging_redacts_sensitive_values(tmp_path: Path) -> N
     assert resolved_path == config_path
     assert "super-secret" not in rendered
     assert "***REDACTED***" in rendered
+
+
+def test_environment_overrides_yaml_values(tmp_path: Path, monkeypatch) -> None:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "processor:",
+                "  host: 127.0.0.1",
+                "  port: 10001",
+                "mqtt:",
+                "  broker: 127.0.0.1",
+                "  port: 1883",
+                "  client_id: inovonics-python-app",
+                "  password: yaml-secret",
+                "bit_coalescing:",
+                "  enabled: true",
+                "logging:",
+                "  level: INFO",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setenv("INOVONICS_PROCESSOR_HOST", "processor")
+    monkeypatch.setenv("INOVONICS_MQTT_BROKER", "mqtt")
+    monkeypatch.setenv("INOVONICS_MQTT_PASSWORD", "env-secret")
+    monkeypatch.setenv("INOVONICS_BIT_COALESCING_ENABLED", "false")
+    monkeypatch.setenv("INOVONICS_LOGGING_LEVEL", "DEBUG")
+
+    config = load_config(config_path)
+
+    assert config.processor.host == "processor"
+    assert config.mqtt.broker == "mqtt"
+    assert config.mqtt.password == "env-secret"
+    assert config.bit_coalescing.enabled is False
+    assert config.logging.level == "DEBUG"
+
+
+def test_render_config_for_logging_shows_environment_overrides(tmp_path: Path, monkeypatch) -> None:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "processor:",
+                "  host: 127.0.0.1",
+                "  port: 10001",
+                "mqtt:",
+                "  broker: 127.0.0.1",
+                "  port: 1883",
+                "  client_id: inovonics-python-app",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setenv("INOVONICS_MQTT_BROKER", "mqtt")
+    monkeypatch.setenv("INOVONICS_MQTT_PASSWORD", "docker-secret")
+
+    resolved_path, rendered = render_config_for_logging(config_path)
+
+    assert resolved_path == config_path
+    assert "broker: mqtt" in rendered
+    assert "docker-secret" not in rendered
+    assert "***REDACTED***" in rendered

@@ -11,3 +11,4 @@ dist
 app.log
 failed_messages.log
 config.local.yaml
+.env
