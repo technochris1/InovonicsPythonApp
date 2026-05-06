@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "inovonics-python-app"
+version = "1.0.0"
+description = "Production MQTT and Home Assistant bridge for Inovonics EchoStream devices."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+authors = [{ name = "technochris1" }]
+keywords = ["inovonics", "mqtt", "home-assistant", "echostream"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Home Automation",
+]
+dependencies = [
+  "PyYAML>=6.0.1,<7.0.0",
+  "paho-mqtt>=1.6.1,<2.0.0",
+  "inovonics-echostream-processor @ git+https://github.com/technochris1/InovonicsEchostreamProcessor.git@v1.0.0",
+]
+
+[project.scripts]
+inovonics-python-app = "inovonics_python_app.__main__:main"
+
+[project.urls]
+Repository = "https://github.com/technochris1/InovonicsPythonApp"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
