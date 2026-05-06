@@ -6,6 +6,8 @@ from typing import Any
 
 import yaml
 
+SENSITIVE_KEY_PARTS = ("password", "secret", "token", "api_key", "apikey")
+
 
 @dataclass(slots=True)
 class LoggingConfig:
@@ -120,6 +122,14 @@ def load_config(config_path: str | Path | None = None) -> AppConfig:
     )
 
 
+def render_config_for_logging(config_path: str | Path | None = None) -> tuple[Path, str]:
+    path = resolve_config_path(config_path)
+    raw_data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    sanitized = _redact_sensitive_values(raw_data)
+    rendered = yaml.safe_dump(sanitized, sort_keys=False).rstrip()
+    return path, rendered or "{}"
+
+
 def _normalize_config(data: dict[str, Any]) -> dict[str, Any]:
     if "processor" in data and "mqtt" in data:
         return data
@@ -161,3 +171,27 @@ def _normalize_config(data: dict[str, Any]) -> dict[str, Any]:
         "mqtt": mqtt,
         "logging": data.get("logging", {}),
     }
+
+
+def _redact_sensitive_values(value: Any) -> Any:
+    if isinstance(value, dict):
+        redacted: dict[str, Any] = {}
+        for key, item in value.items():
+            if _is_sensitive_key(key):
+                redacted[key] = "***REDACTED***"
+            else:
+                redacted[key] = _redact_sensitive_values(item)
+        return redacted
+
+    if isinstance(value, list):
+        return [_redact_sensitive_values(item) for item in value]
+
+    return value
+
+
+def _is_sensitive_key(key: Any) -> bool:
+    if not isinstance(key, str):
+        return False
+
+    lowered = key.lower()
+    return any(part in lowered for part in SENSITIVE_KEY_PARTS)

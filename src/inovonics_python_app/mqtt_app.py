@@ -27,7 +27,12 @@ from inovonics_echostream_processor.transports.cpython_socket import (
     SocketProcessorService,
 )
 
-from inovonics_python_app.config import AppConfig, LoggingConfig, load_config
+from inovonics_python_app.config import (
+    AppConfig,
+    LoggingConfig,
+    load_config,
+    render_config_for_logging,
+)
 from inovonics_python_app.home_assistant import (
     build_discovery_payload,
     discovery_topic,
@@ -308,6 +313,12 @@ def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
     config = load_config(args.config)
     configure_logging(config.logging)
+    config_path, rendered_config = render_config_for_logging(config.config_path)
+    logging.getLogger(__name__).info(
+        "Loaded config from %s:\n%s",
+        config_path,
+        rendered_config,
+    )
 
     app = MqttBridgeApp(config)
     app.start()
