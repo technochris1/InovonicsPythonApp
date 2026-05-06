@@ -133,6 +133,21 @@ INOVONICS_BIT_COALESCING_FLUSH_INTERVAL_MS=250
 INOVONICS_LOGGING_LEVEL=INFO
 ```
 
+### Docker Hub Automation
+
+The repository now includes [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml).
+
+- pushes to `main` publish `technochris1/inovonicspythonapp:latest`
+- pushed Git tags like `v1.3.1` publish the matching Docker tag
+
+Required GitHub repository secrets:
+
+- `DOCKERHUB_USERNAME`
+- `DOCKERHUB_TOKEN`
+
+`DOCKERHUB_TOKEN` should be a Docker Hub access token, not your Docker Hub
+password.
+
 ## Run
 
 ```bash
