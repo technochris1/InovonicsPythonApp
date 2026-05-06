@@ -22,6 +22,13 @@ mqtt:
   discovery_prefix: homeassistant
   state_prefix: inovonics
 
+bit_coalescing:
+  enabled: true
+  quiet_period_ms: 500
+  max_hold_ms: 2000
+  idle_ttl_ms: 900000
+  flush_interval_ms: 250
+
 logging:
   level: INFO
   file: app.log

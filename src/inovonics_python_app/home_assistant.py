@@ -83,3 +83,10 @@ def iter_state_messages(
 
     for bit, value in enumerate(event.stat0_flags, start=1):
         yield state_topic(state_prefix, event.device_uid_hex, 0, bit), bool_to_state(value)
+
+
+def topic_and_payload_for_bit_state_update(update, *, state_prefix: str):
+    return (
+        state_topic(state_prefix, update.device_uid_hex, update.stat_group, update.bit),
+        bool_to_state(update.value),
+    )

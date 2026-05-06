@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "inovonics-python-app"
-version = "1.2.0"
+version = "1.3.0"
 description = "Production MQTT and Home Assistant bridge for Inovonics EchoStream devices."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -21,7 +21,7 @@ classifiers = [
 dependencies = [
   "PyYAML>=6.0.1,<7.0.0",
   "paho-mqtt>=1.6.1,<2.0.0",
-  "inovonics-echostream-processor @ git+https://github.com/technochris1/InovonicsEchostreamProcessor.git@v1.2.0",
+  "inovonics-echostream-processor @ git+https://github.com/technochris1/InovonicsEchostreamProcessor.git@v1.3.0",
 ]
 
 [project.scripts]

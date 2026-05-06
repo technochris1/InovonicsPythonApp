@@ -4,6 +4,7 @@ from inovonics_python_app.home_assistant import (
     build_discovery_payload,
     discovery_topic,
     iter_state_messages,
+    topic_and_payload_for_bit_state_update,
 )
 
 
@@ -47,3 +48,22 @@ def test_discovery_topic_and_state_messages() -> None:
     assert topic == "homeassistant/device/B2010203/config"
     assert messages[0] == ("inovonics/B2010203/1/1/state", "ON")
     assert messages[11] == ("inovonics/B2010203/0/4/state", "ON")
+
+
+def test_topic_and_payload_for_bit_state_update() -> None:
+    topic, payload = topic_and_payload_for_bit_state_update(
+        type(
+            "Update",
+            (),
+            {
+                "device_uid_hex": "B2010203",
+                "stat_group": 0,
+                "bit": 6,
+                "value": True,
+            },
+        )(),
+        state_prefix="inovonics",
+    )
+
+    assert topic == "inovonics/B2010203/0/6/state"
+    assert payload == "ON"

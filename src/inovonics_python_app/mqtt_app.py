@@ -11,6 +11,8 @@ import time
 import paho.mqtt.client as mqtt
 from inovonics_echostream_processor import (
     AckEvent,
+    BitStateCoalescer,
+    BitStateCoalescerConfig,
     CoordinatorNetworkIdEvent,
     CoordinatorSerialNumberEvent,
     CoordinatorStatusEvent,
@@ -21,6 +23,7 @@ from inovonics_echostream_processor import (
     RepeaterResetEvent,
     SecurityMessageEvent,
     UnknownMessageEvent,
+    security_event_to_bit_state_updates,
 )
 from inovonics_echostream_processor.transports.cpython_socket import (
     SocketProcessorConfig,
@@ -36,7 +39,7 @@ from inovonics_python_app.config import (
 from inovonics_python_app.home_assistant import (
     build_discovery_payload,
     discovery_topic,
-    iter_state_messages,
+    topic_and_payload_for_bit_state_update,
 )
 from inovonics_python_app.version import __version__
 
@@ -69,8 +72,11 @@ class MqttBridgeApp:
         self._mqtt_connected = threading.Event()
         self._mqtt_connect_lock = threading.Lock()
         self._mqtt_connect_thread: threading.Thread | None = None
+        self._bit_coalescer_lock = threading.Lock()
+        self._bit_coalescer_thread: threading.Thread | None = None
         self._running = False
         self._known_devices: set[str] = set()
+        self._bit_coalescer = None
 
         self.mqtt_client = mqtt.Client(client_id=self.config.mqtt.client_id)
         if self.config.mqtt.username:
@@ -99,6 +105,16 @@ class MqttBridgeApp:
         )
         self.processor.add_event_handler(self.handle_processor_event)
 
+        if self.config.bit_coalescing.enabled:
+            self._bit_coalescer = BitStateCoalescer(
+                BitStateCoalescerConfig(
+                    enabled=True,
+                    quiet_period_ms=self.config.bit_coalescing.quiet_period_ms,
+                    max_hold_ms=self.config.bit_coalescing.max_hold_ms,
+                    idle_ttl_ms=self.config.bit_coalescing.idle_ttl_ms,
+                )
+            )
+
         atexit.register(self.stop)
 
     def start(self) -> None:
@@ -110,6 +126,7 @@ class MqttBridgeApp:
 
         self.mqtt_client.loop_start()
         self._schedule_mqtt_connect()
+        self._start_bit_coalescer_flush_loop()
 
         if not self._mqtt_connected.wait(self.config.mqtt.startup_wait_timeout_seconds):
             self.logger.warning(
@@ -128,6 +145,17 @@ class MqttBridgeApp:
         self._stop_event.set()
 
         self.processor.stop()
+        if self._bit_coalescer_thread is not None:
+            self._bit_coalescer_thread.join(timeout=3)
+
+        try:
+            self._flush_buffered_bit_updates(flush_all=True, clear_after_flush=True)
+        except Exception:
+            self.logger.warning(
+                "Failed to flush buffered bit-state updates during shutdown.",
+                exc_info=True,
+            )
+
         self._mqtt_connected.clear()
 
         try:
@@ -178,6 +206,29 @@ class MqttBridgeApp:
                 if self._mqtt_connect_thread is threading.current_thread():
                     self._mqtt_connect_thread = None
 
+    def _start_bit_coalescer_flush_loop(self) -> None:
+        if self._bit_coalescer is None:
+            return
+
+        self._bit_coalescer_thread = threading.Thread(
+            target=self._bit_coalescer_flush_loop,
+            daemon=True,
+            name="bit-coalescer-flush",
+        )
+        self._bit_coalescer_thread.start()
+
+    def _bit_coalescer_flush_loop(self) -> None:
+        interval_seconds = max(self.config.bit_coalescing.flush_interval_ms / 1000.0, 0.05)
+
+        while not self._stop_event.wait(interval_seconds):
+            try:
+                self._flush_buffered_bit_updates()
+            except Exception:
+                self.logger.warning(
+                    "Bit-state coalescer flush loop failed.",
+                    exc_info=True,
+                )
+
     def on_mqtt_connect(self, client, userdata, flags, rc) -> None:
         if rc != 0:
             self.logger.error("MQTT broker rejected the connection with rc=%s", rc)
@@ -226,7 +277,7 @@ class MqttBridgeApp:
 
     def handle_processor_event(self, event: ProcessorEvent) -> None:
         if isinstance(event, SecurityMessageEvent):
-            self._publish_security_event(event)
+            self._handle_security_event(event)
             return
 
         if isinstance(event, CoordinatorStatusEvent):
@@ -276,14 +327,76 @@ class MqttBridgeApp:
         if isinstance(event, UnknownMessageEvent):
             self.logger.debug("Unknown EchoStream message: %s", event.reason)
 
-    def _publish_security_event(self, event: SecurityMessageEvent) -> None:
+    def _handle_security_event(self, event: SecurityMessageEvent) -> None:
         self._publish_discovery_if_needed(event)
 
-        for topic, state in iter_state_messages(
-            event,
-            state_prefix=self.config.mqtt.state_prefix,
-        ):
-            self.publish(topic, state, retain=True)
+        bit_state_updates = security_event_to_bit_state_updates(event)
+        if self._bit_coalescer is None:
+            self._publish_bit_state_updates(bit_state_updates)
+            return
+
+        with self._bit_coalescer_lock:
+            ready_updates = self._bit_coalescer.ingest(bit_state_updates)
+
+        self._publish_bit_state_updates(ready_updates)
+
+    def _flush_buffered_bit_updates(
+        self,
+        *,
+        flush_all: bool = False,
+        clear_after_flush: bool = False,
+    ) -> None:
+        if self._bit_coalescer is None:
+            return
+
+        with self._bit_coalescer_lock:
+            if flush_all:
+                ready_updates = self._bit_coalescer.flush_all()
+            else:
+                ready_updates = self._bit_coalescer.flush_due()
+
+            if clear_after_flush:
+                self._bit_coalescer.clear()
+
+        self._publish_bit_state_updates(ready_updates)
+
+    def _publish_bit_state_updates(self, updates) -> None:
+        if not updates:
+            return
+
+        failed_updates = []
+
+        for update in updates:
+            topic, state = topic_and_payload_for_bit_state_update(
+                update,
+                state_prefix=self.config.mqtt.state_prefix,
+            )
+
+            if getattr(update, "toggles_suppressed", 0):
+                self.logger.info(
+                    "Publishing coalesced bit state device=%s stat=%s bit=%s state=%s suppressed_toggles=%s",
+                    update.device_uid_hex,
+                    update.stat_group,
+                    update.bit,
+                    state,
+                    update.toggles_suppressed,
+                )
+
+            try:
+                self.publish(topic, state, retain=True)
+            except Exception:
+                self.logger.warning(
+                    "Failed to publish bit state device=%s stat=%s bit=%s. Re-queueing update.",
+                    update.device_uid_hex,
+                    update.stat_group,
+                    update.bit,
+                    exc_info=True,
+                )
+                failed_updates.append(update)
+
+        if failed_updates and self._bit_coalescer is not None and self._running:
+            with self._bit_coalescer_lock:
+                self._bit_coalescer.requeue(failed_updates)
 
     def _publish_discovery_if_needed(self, event: SecurityMessageEvent) -> None:
         if event.device_uid_hex in self._known_devices:
