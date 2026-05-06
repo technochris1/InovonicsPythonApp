@@ -23,6 +23,7 @@ ENV PATH="/opt/venv/bin:${PATH}" \
     INOVONICS_MQTT_PORT=1883 \
     INOVONICS_MQTT_CLIENT_ID=inovonics-python-app \
     INOVONICS_MQTT_USERNAME= \
+    INOVONICS_MQTT_PASSWORD=password \
     INOVONICS_MQTT_COMMAND_TOPIC=homeassistant \
     INOVONICS_MQTT_DISCOVERY_PREFIX=homeassistant \
     INOVONICS_MQTT_STATE_PREFIX=inovonics \

@@ -58,8 +58,8 @@ variables. By default it assumes:
 
 - the EchoStream socket endpoint is reachable as `processor:10001`
 - the MQTT broker is reachable as `mqtt:1883`
-- MQTT authentication is blank unless `INOVONICS_MQTT_USERNAME` and
-  `INOVONICS_MQTT_PASSWORD` are provided
+- the MQTT password placeholder default is `password`
+- if a password is set, the app applies it even when the username is blank
 
 Those defaults can be overridden with standard Docker environment variables,
 for example:
@@ -121,7 +121,7 @@ INOVONICS_MQTT_BROKER=192.168.1.31
 INOVONICS_MQTT_PORT=1883
 INOVONICS_MQTT_CLIENT_ID=inovonics-python-app
 INOVONICS_MQTT_USERNAME=mqtt-user
-INOVONICS_MQTT_PASSWORD=change-me
+INOVONICS_MQTT_PASSWORD=password
 INOVONICS_MQTT_COMMAND_TOPIC=homeassistant
 INOVONICS_MQTT_DISCOVERY_PREFIX=homeassistant
 INOVONICS_MQTT_STATE_PREFIX=inovonics

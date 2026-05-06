@@ -79,9 +79,9 @@ class MqttBridgeApp:
         self._bit_coalescer = None
 
         self.mqtt_client = mqtt.Client(client_id=self.config.mqtt.client_id)
-        if self.config.mqtt.username:
+        if self.config.mqtt.username or self.config.mqtt.password:
             self.mqtt_client.username_pw_set(
-                self.config.mqtt.username,
+                self.config.mqtt.username or "",
                 self.config.mqtt.password or "",
             )
 
