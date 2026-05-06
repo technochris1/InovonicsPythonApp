@@ -8,8 +8,9 @@ discovery, and state publication.
 
 ## Architecture
 
-- `InovonicsEchostreamProcessor`: socket client, frame decoding, normalized
-  EchoStream events
+- `InovonicsEchostreamProcessor` core: transport-free frame decoding,
+  protocol parsing, normalized EchoStream events, runtime detection
+- `InovonicsEchostreamProcessor` CPython transport: threaded TCP socket adapter
 - `InovonicsPythonApp`: MQTT lifecycle, Home Assistant discovery/state topics,
   application logging, and deployment packaging
 

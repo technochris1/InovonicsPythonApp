@@ -14,14 +14,17 @@ from inovonics_echostream_processor import (
     CoordinatorNetworkIdEvent,
     CoordinatorSerialNumberEvent,
     CoordinatorStatusEvent,
-    EchoStreamProcessor,
-    EchoStreamProcessorConfig,
+    EchoStreamProcessorCore,
     NakEvent,
     NetworkStatusEvent,
     ProcessorEvent,
     RepeaterResetEvent,
     SecurityMessageEvent,
     UnknownMessageEvent,
+)
+from inovonics_echostream_processor.transports.cpython_socket import (
+    SocketProcessorConfig,
+    SocketProcessorService,
 )
 
 from inovonics_python_app.config import AppConfig, LoggingConfig, load_config
@@ -75,14 +78,16 @@ class MqttBridgeApp:
         self.mqtt_client.on_disconnect = self.on_mqtt_disconnect
         self.mqtt_client.on_message = self.on_mqtt_message
 
-        self.processor = EchoStreamProcessor(
-            EchoStreamProcessorConfig(
+        self.processor = SocketProcessorService(
+            SocketProcessorConfig(
                 host=self.config.processor.host,
                 port=self.config.processor.port,
                 reconnect_initial_delay_seconds=self.config.processor.reconnect_initial_delay_seconds,
                 reconnect_max_delay_seconds=self.config.processor.reconnect_max_delay_seconds,
                 socket_timeout_seconds=self.config.processor.socket_timeout_seconds,
                 queue_timeout_seconds=self.config.processor.queue_timeout_seconds,
+            ),
+            core=EchoStreamProcessorCore(
                 auto_request_coordinator_metadata=self.config.processor.auto_request_coordinator_metadata,
             ),
             logger=logging.getLogger("EchoStreamProcessor"),
