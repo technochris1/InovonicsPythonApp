@@ -159,3 +159,41 @@ or
 ```bash
 python -m inovonics_python_app
 ```
+
+<!-- CODEX-REPO-MAP START -->
+# InovonicsPythonApp
+
+This repository contains the `InovonicsPythonApp` project.
+
+Primary languages and file types: Python.
+
+## Root files
+
+| Item | Role |
+| --- | --- |
+| `.dockerignore` | Supporting file. |
+| `.env.example` | Supporting file. |
+| `.gitattributes` | Supporting file. |
+| `.gitignore` | Supporting file. |
+| `App.py` | Main Python app entrypoint. |
+| `config.example.yaml` | YAML configuration. |
+| `config.yaml` | YAML configuration. |
+| `Dockerfile` | Container build instructions. |
+| `pyproject.toml` | Python project metadata. |
+| `requirements.txt` | Python dependency list. |
+
+## App folders
+
+| Folder | Summary |
+| --- | --- |
+| `src/inovonics_python_app` | Code folder for `inovonics_python_app`; contains `config.py`, `home_assistant.py`, `mqtt_app.py`, `version.py`, `__init__.py`. |
+| `tests` | Code folder for `tests`; contains `test_config.py`, `test_home_assistant.py`. |
+
+## Folder docs
+
+| Path | Role |
+| --- | --- |
+| `src/inovonics_python_app/README.md` | Folder-level summary for the code in that directory. |
+| `tests/README.md` | Folder-level summary for the code in that directory. |
+
+<!-- CODEX-REPO-MAP END -->
