@@ -35,16 +35,24 @@ def bool_to_state(flag: bool) -> str:
     return "ON" if flag else "OFF"
 
 
+def is_reserved_component(group: int, bit: int) -> bool:
+    return COMPONENT_DEFINITIONS.get((group, bit), {}).get("name") == "Reserved"
+
+
 def build_discovery_payload(
     event: SecurityMessageEvent,
     *,
     state_prefix: str,
     app_name: str,
     app_version: str,
+    hide_reserved_events: bool = True,
 ) -> dict[str, object]:
     components: dict[str, dict[str, str]] = {}
 
     for (group, bit), metadata in COMPONENT_DEFINITIONS.items():
+        if hide_reserved_events and metadata["name"] == "Reserved":
+            continue
+
         component = {
             "p": "binary_sensor",
             "name": metadata["name"],
@@ -77,11 +85,16 @@ def iter_state_messages(
     event: SecurityMessageEvent,
     *,
     state_prefix: str,
+    hide_reserved_events: bool = True,
 ):
     for bit, value in enumerate(event.stat1_flags, start=1):
+        if hide_reserved_events and is_reserved_component(1, bit):
+            continue
         yield state_topic(state_prefix, event.device_uid_hex, 1, bit), bool_to_state(value)
 
     for bit, value in enumerate(event.stat0_flags, start=1):
+        if hide_reserved_events and is_reserved_component(0, bit):
+            continue
         yield state_topic(state_prefix, event.device_uid_hex, 0, bit), bool_to_state(value)
 
 

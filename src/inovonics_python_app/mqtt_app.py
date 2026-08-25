@@ -42,6 +42,7 @@ from inovonics_python_app.home_assistant import (
     build_discovery_payload,
     discovery_topic,
     topic_and_payload_for_bit_state_update,
+    is_reserved_component,
 )
 from inovonics_python_app.version import __version__
 
@@ -357,6 +358,12 @@ class MqttBridgeApp:
         self._publish_discovery_if_needed(event)
 
         bit_state_updates = security_event_to_bit_state_updates(event)
+        if self.config.mqtt.hide_reserved_events:
+            bit_state_updates = [
+                update
+                for update in bit_state_updates
+                if not is_reserved_component(update.stat_group, update.bit)
+            ]
         if self._bit_coalescer is None:
             self._publish_bit_state_updates(bit_state_updates)
             return
@@ -433,6 +440,7 @@ class MqttBridgeApp:
             state_prefix=self.config.mqtt.state_prefix,
             app_name="inovonics-python-app",
             app_version=__version__,
+            hide_reserved_events=self.config.mqtt.hide_reserved_events,
         )
         topic = discovery_topic(self.config.mqtt.discovery_prefix, event.device_uid_hex)
         self.publish(topic, json.dumps(payload), retain=True)

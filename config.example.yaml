@@ -21,6 +21,7 @@ mqtt:
   command_topic: homeassistant
   discovery_prefix: homeassistant
   state_prefix: inovonics
+  hide_reserved_events: true
 
 bit_coalescing:
   enabled: true

@@ -117,6 +117,7 @@ Common environment variables:
 - `INOVONICS_MQTT_COMMAND_TOPIC`
 - `INOVONICS_MQTT_DISCOVERY_PREFIX`
 - `INOVONICS_MQTT_STATE_PREFIX`
+- `INOVONICS_MQTT_HIDE_RESERVED_EVENTS` (default: `true`)
 - `INOVONICS_BIT_COALESCING_ENABLED`
 - `INOVONICS_BIT_COALESCING_QUIET_PERIOD_MS`
 - `INOVONICS_BIT_COALESCING_MAX_HOLD_MS`
@@ -143,6 +144,7 @@ services:
       INOVONICS_MQTT_PORT: "1883"
       INOVONICS_MQTT_USERNAME: mqtt-user
       INOVONICS_MQTT_PASSWORD: super-secret
+      INOVONICS_MQTT_HIDE_RESERVED_EVENTS: "true"
 
 volumes:
   inovonics-python-app-logs:
@@ -218,6 +220,12 @@ it appears again after redeployment, capture the final Docker log lines and
 the Inspect values above; the new diagnostics should identify whether the
 failure came from configuration, startup, a worker thread, or the runtime.
 
+Reserved events are hidden by default from both MQTT state publishing and
+Home Assistant discovery. Set `INOVONICS_MQTT_HIDE_RESERVED_EVENTS=false` if
+those bits are needed. If Reserved entities were already discovered before
+this option was enabled, their old retained MQTT discovery/state topics may
+need to be removed once from the MQTT broker or Home Assistant.
+
 Example `.env` format:
 
 ```dotenv
@@ -231,6 +239,7 @@ INOVONICS_MQTT_PASSWORD=password
 INOVONICS_MQTT_COMMAND_TOPIC=homeassistant
 INOVONICS_MQTT_DISCOVERY_PREFIX=homeassistant
 INOVONICS_MQTT_STATE_PREFIX=inovonics
+INOVONICS_MQTT_HIDE_RESERVED_EVENTS=true
 INOVONICS_BIT_COALESCING_ENABLED=true
 INOVONICS_BIT_COALESCING_QUIET_PERIOD_MS=500
 INOVONICS_BIT_COALESCING_MAX_HOLD_MS=2000

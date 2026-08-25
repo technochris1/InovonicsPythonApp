@@ -76,6 +76,11 @@ ENV_OVERRIDE_SPECS = (
     ("INOVONICS_MQTT_DISCOVERY_PREFIX", ("mqtt", "discovery_prefix"), str),
     ("INOVONICS_MQTT_STATE_PREFIX", ("mqtt", "state_prefix"), str),
     (
+        "INOVONICS_MQTT_HIDE_RESERVED_EVENTS",
+        ("mqtt", "hide_reserved_events"),
+        lambda raw: _parse_bool(raw, env_name="INOVONICS_MQTT_HIDE_RESERVED_EVENTS"),
+    ),
+    (
         "INOVONICS_BIT_COALESCING_ENABLED",
         ("bit_coalescing", "enabled"),
         lambda raw: _parse_bool(raw, env_name="INOVONICS_BIT_COALESCING_ENABLED"),
@@ -141,6 +146,7 @@ class MQTTConfig:
     command_topic: str | None = None
     discovery_prefix: str = "homeassistant"
     state_prefix: str = "inovonics"
+    hide_reserved_events: bool = True
 
 
 @dataclass(slots=True)
@@ -234,6 +240,7 @@ def load_config(config_path: str | Path | None = None) -> AppConfig:
             command_topic=mqtt_data.get("command_topic"),
             discovery_prefix=mqtt_data.get("discovery_prefix", "homeassistant"),
             state_prefix=mqtt_data.get("state_prefix", "inovonics"),
+            hide_reserved_events=bool(mqtt_data.get("hide_reserved_events", True)),
         ),
         bit_coalescing=BitCoalescingConfig(
             enabled=bool(bit_coalescing_data.get("enabled", True)),

@@ -27,6 +27,7 @@ def test_bit_coalescing_defaults_to_enabled(tmp_path: Path) -> None:
     assert config.bit_coalescing.max_hold_ms == 2000
     assert config.bit_coalescing.idle_ttl_ms == 900000
     assert config.bit_coalescing.flush_interval_ms == 250
+    assert config.mqtt.hide_reserved_events is True
 
 
 def test_render_config_for_logging_redacts_sensitive_values(tmp_path: Path) -> None:
@@ -80,6 +81,7 @@ def test_environment_overrides_yaml_values(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("INOVONICS_MQTT_BROKER", "mqtt")
     monkeypatch.setenv("INOVONICS_MQTT_PASSWORD", "env-secret")
     monkeypatch.setenv("INOVONICS_BIT_COALESCING_ENABLED", "false")
+    monkeypatch.setenv("INOVONICS_MQTT_HIDE_RESERVED_EVENTS", "false")
     monkeypatch.setenv("INOVONICS_LOGGING_LEVEL", "DEBUG")
 
     config = load_config(config_path)
@@ -88,6 +90,7 @@ def test_environment_overrides_yaml_values(tmp_path: Path, monkeypatch) -> None:
     assert config.mqtt.broker == "mqtt"
     assert config.mqtt.password == "env-secret"
     assert config.bit_coalescing.enabled is False
+    assert config.mqtt.hide_reserved_events is False
     assert config.logging.level == "DEBUG"
 
 

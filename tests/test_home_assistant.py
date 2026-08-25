@@ -47,7 +47,21 @@ def test_discovery_topic_and_state_messages() -> None:
 
     assert topic == "homeassistant/device/B2010203/config"
     assert messages[0] == ("inovonics/B2010203/1/1/state", "ON")
-    assert messages[11] == ("inovonics/B2010203/0/4/state", "ON")
+    assert len(messages) == 8
+    assert messages[-1] == ("inovonics/B2010203/0/7/state", "OFF")
+
+
+def test_reserved_events_can_be_published() -> None:
+    messages = list(
+        iter_state_messages(
+            _event(),
+            state_prefix="inovonics",
+            hide_reserved_events=False,
+        )
+    )
+
+    assert len(messages) == 16
+    assert ("inovonics/B2010203/1/5/state", "OFF") in messages
 
 
 def test_topic_and_payload_for_bit_state_update() -> None:
