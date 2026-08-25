@@ -61,6 +61,34 @@ variables. By default it assumes:
 - the MQTT password placeholder default is `password`
 - if a password is set, the app applies it even when the username is blank
 
+The image is published as `technochris1/inovonicspythonapp`. The container
+command is `python -u App.py`. Application logs are written both to Docker's
+container log and to `/app/logs/app.log`.
+
+### Build and Publish Manually
+
+Run these commands from the repository root after changing the code:
+
+```bash
+docker login
+docker build --pull -t technochris1/inovonicspythonapp:latest .
+docker push technochris1/inovonicspythonapp:latest
+```
+
+For a versioned release, publish an additional immutable tag:
+
+```bash
+docker build --pull \
+  -t technochris1/inovonicspythonapp:1.3.2 \
+  -t technochris1/inovonicspythonapp:latest .
+docker push technochris1/inovonicspythonapp:1.3.2
+docker push technochris1/inovonicspythonapp:latest
+```
+
+The repository also includes [Docker Hub automation](#docker-hub-automation).
+That workflow publishes `latest` when `main` is updated and publishes the
+matching tag when a version tag such as `v1.3.2` is pushed.
+
 Those defaults can be overridden with standard Docker environment variables,
 for example:
 
@@ -95,6 +123,7 @@ Common environment variables:
 - `INOVONICS_BIT_COALESCING_IDLE_TTL_MS`
 - `INOVONICS_BIT_COALESCING_FLUSH_INTERVAL_MS`
 - `INOVONICS_LOGGING_LEVEL`
+- `INOVONICS_LOGGING_FILE`
 - `INOVONICS_CONFIG_PATH`
 
 Example `docker-compose.yml` fragment:
@@ -103,6 +132,10 @@ Example `docker-compose.yml` fragment:
 services:
   inovonics:
     image: technochris1/inovonicspythonapp:latest
+    init: true
+    restart: unless-stopped
+    volumes:
+      - inovonics-python-app-logs:/app/logs
     environment:
       INOVONICS_PROCESSOR_HOST: 192.168.1.60
       INOVONICS_PROCESSOR_PORT: "10001"
@@ -110,7 +143,80 @@ services:
       INOVONICS_MQTT_PORT: "1883"
       INOVONICS_MQTT_USERNAME: mqtt-user
       INOVONICS_MQTT_PASSWORD: super-secret
+
+volumes:
+  inovonics-python-app-logs:
 ```
+
+### Deploy in Portainer
+
+The recommended Portainer deployment is a Stack because the restart policy,
+init process, and persistent log volume are saved as configuration.
+
+1. Build and push the image, or wait for the GitHub workflow to finish.
+2. Open the `local` Docker environment in Portainer.
+3. Select **Stacks**, then **Add stack**.
+4. Name the stack `inovonics-python-app`.
+5. Paste the Compose definition above into the Web editor.
+6. Replace the processor, MQTT, username, and password values with the values
+   for the local network.
+7. Select **Deploy the stack**.
+
+To update an existing Stack after publishing a new `latest` image:
+
+1. Open the Stack and select **Editor**.
+2. Select **Update the stack** and enable **Pull latest image version** if the
+   option is shown.
+3. Deploy/update the Stack.
+4. Open the container logs and confirm that it reports the loaded config and
+   `Bridge started`.
+
+If Portainer does not offer a pull option, manually pull
+`technochris1/inovonicspythonapp:latest` from the **Images** page, then
+recreate or redeploy the Stack. Docker will not automatically replace an
+existing container just because the registry tag changed.
+
+### Deploy as an Individual Container
+
+If using **Containers > Add container** instead of a Stack, use:
+
+- Image: `technochris1/inovonicspythonapp:latest`
+- Restart policy: `Unless stopped`
+- Init: enabled
+- Volume: a named volume mounted at `/app/logs`
+- Environment variables: the same `INOVONICS_*` values shown above
+
+When changing the image, use **Recreate** and enable **Pull latest image**.
+Editing an existing container does not change the image that was used to
+create it.
+
+### Verify and Troubleshoot
+
+Check the container's **Logs** page first. Fatal Python errors now include a
+traceback and end with `Fatal application error; exiting with status 1`.
+Exceptions from worker threads include the thread name. The container's exit
+code is still useful, but Docker does not generate a Python traceback itself;
+the application must write that traceback to stderr, which this image now
+does.
+
+The persistent log file is available from the mounted volume at:
+
+```text
+/app/logs/app.log
+```
+
+In **Inspect**, these fields are useful:
+
+- `State.Error`: Docker/runtime-level error, if any
+- `State.ExitCode`: process exit status
+- `State.OOMKilled`: whether the kernel killed the container for memory
+- `State.StartedAt` and `State.FinishedAt`: exact runtime window
+- `RestartCount`: whether the restart policy is repeatedly cycling
+
+An exit code of `255` is not intentionally returned by this application. If
+it appears again after redeployment, capture the final Docker log lines and
+the Inspect values above; the new diagnostics should identify whether the
+failure came from configuration, startup, a worker thread, or the runtime.
 
 Example `.env` format:
 

@@ -17,6 +17,7 @@ FROM python:3.12-slim-bookworm
 
 ENV PATH="/opt/venv/bin:${PATH}" \
     PYTHONUNBUFFERED=1 \
+    PYTHONFAULTHANDLER=1 \
     INOVONICS_PROCESSOR_HOST=processor \
     INOVONICS_PROCESSOR_PORT=10001 \
     INOVONICS_MQTT_BROKER=mqtt \
@@ -32,11 +33,19 @@ ENV PATH="/opt/venv/bin:${PATH}" \
     INOVONICS_BIT_COALESCING_MAX_HOLD_MS=2000 \
     INOVONICS_BIT_COALESCING_IDLE_TTL_MS=900000 \
     INOVONICS_BIT_COALESCING_FLUSH_INTERVAL_MS=250 \
-    INOVONICS_LOGGING_LEVEL=INFO
+    INOVONICS_LOGGING_LEVEL=INFO \
+    INOVONICS_LOGGING_FILE=/app/logs/app.log
 
 WORKDIR /app
 
 COPY --from=builder /opt/venv /opt/venv
 COPY . .
 
-CMD ["python", "App.py"]
+RUN mkdir -p /app/logs
+
+# Mount this directory from the runtime so file logs survive container replacement.
+VOLUME ["/app/logs"]
+
+STOPSIGNAL SIGTERM
+
+CMD ["python", "-u", "App.py"]

@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import argparse
 import atexit
+import faulthandler
 import json
 import logging
 import logging.handlers
+import sys
 import threading
 import time
 
@@ -62,6 +64,30 @@ def configure_logging(config: LoggingConfig) -> None:
 
     root_logger.addHandler(file_handler)
     root_logger.addHandler(stream_handler)
+
+
+def configure_diagnostic_hooks() -> None:
+    """Send fatal main-thread and worker-thread failures to Docker stderr."""
+    faulthandler.enable(file=sys.stderr, all_threads=True)
+
+    def handle_uncaught_exception(exc_type, exc_value, exc_traceback) -> None:
+        if issubclass(exc_type, KeyboardInterrupt):
+            sys.__excepthook__(exc_type, exc_value, exc_traceback)
+            return
+        logging.getLogger(__name__).critical(
+            "Uncaught exception",
+            exc_info=(exc_type, exc_value, exc_traceback),
+        )
+
+    def handle_thread_exception(args: threading.ExceptHookArgs) -> None:
+        logging.getLogger(__name__).critical(
+            "Uncaught exception in thread %s",
+            args.thread.name if args.thread is not None else "<unknown>",
+            exc_info=(args.exc_type, args.exc_value, args.exc_traceback),
+        )
+
+    sys.excepthook = handle_uncaught_exception
+    threading.excepthook = handle_thread_exception
 
 
 class MqttBridgeApp:
@@ -423,25 +449,41 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_arg_parser().parse_args(argv)
-    config = load_config(args.config)
-    configure_logging(config.logging)
-    config_path, rendered_config = render_config_for_logging(config.config_path)
-    logging.getLogger(__name__).info(
-        "Loaded config from %s:\n%s",
-        config_path,
-        rendered_config,
+    configure_diagnostic_hooks()
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        stream=sys.stderr,
+        force=True,
     )
 
-    app = MqttBridgeApp(config)
-    app.start()
-
+    app: MqttBridgeApp | None = None
     try:
+        args = build_arg_parser().parse_args(argv)
+        config = load_config(args.config)
+        configure_logging(config.logging)
+        config_path, rendered_config = render_config_for_logging(config.config_path)
+        logging.getLogger(__name__).info(
+            "Loaded config from %s:\n%s",
+            config_path,
+            rendered_config,
+        )
+
+        app = MqttBridgeApp(config)
+        app.start()
+
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
         logging.getLogger(__name__).info("Interrupted by user.")
+    except Exception:
+        logging.getLogger(__name__).critical(
+            "Fatal application error; exiting with status 1.",
+            exc_info=True,
+        )
+        return 1
     finally:
-        app.stop()
+        if app is not None:
+            app.stop()
 
     return 0
